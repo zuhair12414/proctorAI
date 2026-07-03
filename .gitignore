@@ -1,4 +1,7 @@
 .cache/
 __pycache__/
 runs/
+external/
+weights/
 *.pt
+*.pth
