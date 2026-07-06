@@ -4,3 +4,10 @@ node_modules/
 events.jsonl
 .claude/
 .DS_Store
+.cache/
+__pycache__/
+runs/
+external/
+weights/
+*.pt
+*.pth
