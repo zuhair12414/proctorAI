@@ -127,6 +127,21 @@
       background: rgba(0, 0, 0, 0.55);
     }
 
+    .video-tile .bbox-layer {
+      position: absolute;
+      inset: 0;
+      transform: scaleX(-1);
+      pointer-events: none;
+    }
+
+    .video-tile .bbox-box {
+      position: absolute;
+      border: 2px solid #34a853;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      transition: left 0.1s linear, top 0.1s linear, width 0.1s linear, height 0.1s linear;
+    }
+
     .sidebar {
       width: 320px;
       flex-shrink: 0;
@@ -207,6 +222,13 @@
       font-style: italic;
     }
 
+    .log-entry .snapshot {
+      display: block;
+      width: 100%;
+      border-radius: 6px;
+      margin-top: 6px;
+    }
+
     .controls {
       display: flex;
       align-items: center;
@@ -271,6 +293,7 @@
         <div class="video-tile">
           <span class="placeholder" id="placeholder">Camera off</span>
           <video id="localVideo" autoplay muted playsinline></video>
+          <div class="bbox-layer" id="bboxLayer"></div>
           <span class="badge" id="detectionBadge" style="display:none;"></span>
           <span class="name-tag">candidate-1</span>
         </div>
@@ -309,6 +332,7 @@
     const detectionBadge = document.getElementById("detectionBadge");
     const logList = document.getElementById("logList");
     const logEmpty = document.getElementById("logEmpty");
+    const bboxLayer = document.getElementById("bboxLayer");
 
     let room;
     let videoTrack;
@@ -367,6 +391,14 @@
         ${reasonHtml}
       `;
 
+      if (event.snapshot_base64) {
+        const img = document.createElement("img");
+        img.className = "snapshot";
+        img.src = `data:image/jpeg;base64,${event.snapshot_base64}`;
+        img.alt = "Violation snapshot";
+        entry.appendChild(img);
+      }
+
       logList.appendChild(entry);
       logList.scrollTop = logList.scrollHeight;
 
@@ -377,6 +409,37 @@
       detectionBadge.textContent = pillLabel;
       detectionBadge.style.display = "inline-block";
       detectionBadge.style.background = STATUS_COLORS[status] || STATUS_COLORS.error;
+    }
+
+    const BOX_COLORS = {
+      ok: "#34a853",
+      partial_frame: "#fbbc04",
+      low_confidence: "#fbbc04",
+      multiple_persons: "#ea4335",
+    };
+
+    function updateBboxOverlay(event) {
+      bboxLayer.innerHTML = "";
+
+      const boxes = Array.isArray(event.boxes) && event.boxes.length
+        ? event.boxes
+        : Array.isArray(event.bbox) && event.bbox.length === 4
+        ? [{ bbox: event.bbox }]
+        : [];
+
+      const color = BOX_COLORS[event.status] || "#34a853";
+
+      for (const item of boxes) {
+        const [x1, y1, x2, y2] = item.bbox;
+        const box = document.createElement("div");
+        box.className = "bbox-box";
+        box.style.left = `${x1 * 100}%`;
+        box.style.top = `${y1 * 100}%`;
+        box.style.width = `${(x2 - x1) * 100}%`;
+        box.style.height = `${(y2 - y1) * 100}%`;
+        box.style.borderColor = color;
+        bboxLayer.appendChild(box);
+      }
     }
 
     joinBtn.onclick = async () => {
@@ -404,6 +467,7 @@
           try {
             const event = JSON.parse(new TextDecoder().decode(payload));
             addLogEntry(event);
+            updateBboxOverlay(event);
           } catch (e) {
             console.error("Bad detection event payload", e);
           }
@@ -464,6 +528,7 @@
       leaveBtn.style.display = "none";
       placeholder.style.display = "block";
       detectionBadge.style.display = "none";
+      bboxLayer.innerHTML = "";
       micEnabled = true;
       camEnabled = true;
       micBtn.classList.remove("off");

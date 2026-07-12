@@ -1,0 +1,19 @@
+{
+    "name": "riya",
+    "version": "1.0.0",
+    "main": "server.js",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js",
+        "agent": "node agent.js"
+    },
+    "dependencies": {
+        "@livekit/rtc-node": "^0.13.30",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.0",
+        "express": "^5.1.0",
+        "livekit-client": "^2.20.0",
+        "livekit-server-sdk": "^2.13.3",
+        "sharp": "^0.35.3"
+    }
+}

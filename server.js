@@ -29,14 +29,10 @@ app.post("/token", async (req, res) => {
     const roomName = req.body.roomName || "riya-interview-room";
     const participantName = req.body.participantName || "candidate";
 
-    const token = new AccessToken(
-      LIVEKIT_API_KEY,
-      LIVEKIT_API_SECRET,
-      {
-        identity: participantName,
-        ttl: "1h",
-      }
-    );
+    const token = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity: participantName,
+      ttl: "1h",
+    });
 
     token.addGrant({
       roomJoin: true,
@@ -62,7 +58,7 @@ app.post("/token", async (req, res) => {
   }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`Riya server running on http://localhost:${PORT}`);

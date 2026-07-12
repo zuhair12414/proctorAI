@@ -58,6 +58,12 @@ def parse_args():
         default="cpu",
         help="Torch device for D-FINE, e.g. cpu, mps, cuda:0.",
     )
+    parser.add_argument(
+        "--nms-iou",
+        type=float,
+        default=0.5,
+        help="IoU threshold above which overlapping person boxes are treated as duplicates.",
+    )
     return parser.parse_args()
 
 
@@ -72,6 +78,37 @@ def normalize_source(source):
     return int(source) if source.isdigit() else source
 
 
+def box_iou(box_a, box_b):
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+
+    inter_x1 = max(ax1, bx1)
+    inter_y1 = max(ay1, by1)
+    inter_x2 = min(ax2, bx2)
+    inter_y2 = min(ay2, by2)
+
+    inter_area = max(0.0, inter_x2 - inter_x1) * max(0.0, inter_y2 - inter_y1)
+    if inter_area <= 0:
+        return 0.0
+
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union_area = area_a + area_b - inter_area
+    return inter_area / union_area if union_area > 0 else 0.0
+
+
+def non_max_suppression(people, iou_threshold=0.5):
+    """Greedily drop lower-confidence boxes that overlap a higher-confidence
+    box for the same person, so one person isn't double-counted."""
+    ordered = sorted(people, key=lambda person: person["score"], reverse=True)
+    kept = []
+    for candidate in ordered:
+        if any(box_iou(candidate["box"], other["box"]) > iou_threshold for other in kept):
+            continue
+        kept.append(candidate)
+    return kept
+
+
 class DfineDeployModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -84,7 +121,7 @@ class DfineDeployModel(nn.Module):
 
 
 class DfinePersonDetector:
-    def __init__(self, dfine_root, config_path, checkpoint_path, device, image_size, conf, person_labels):
+    def __init__(self, dfine_root, config_path, checkpoint_path, device, image_size, conf, person_labels, nms_iou=0.5):
         self.dfine_root = Path(dfine_root).expanduser().resolve()
         self.config_path = Path(config_path).expanduser().resolve()
         self.checkpoint_path = Path(checkpoint_path).expanduser().resolve()
@@ -92,6 +129,7 @@ class DfinePersonDetector:
         self.image_size = image_size
         self.conf = conf
         self.person_labels = person_labels
+        self.nms_iou = nms_iou
         self.transforms = T.Compose([T.Resize((image_size, image_size)), T.ToTensor()])
 
         self._validate_paths()
@@ -156,7 +194,7 @@ class DfinePersonDetector:
         for label, box, score in zip(labels, boxes, scores):
             if int(label) in self.person_labels and float(score) >= self.conf:
                 people.append({"box": box, "score": float(score)})
-        return people
+        return non_max_suppression(people, iou_threshold=self.nms_iou)
 
 
 def draw_rounded_rect(image, top_left, bottom_right, radius, color, thickness=-1):
@@ -277,6 +315,7 @@ def main():
         image_size=args.imgsz,
         conf=args.conf,
         person_labels=parse_label_ids(args.person_labels),
+        nms_iou=args.nms_iou,
     )
 
     cap = cv2.VideoCapture(source)
